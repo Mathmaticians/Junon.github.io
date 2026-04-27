@@ -22,16 +22,15 @@
     import { getFirestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    // ▼▼▼  PASTE YOUR FIREBASE CONFIG HERE  ▼▼▼
     const firebaseConfig = {
-      apiKey:            "YOUR_API_KEY",
-      authDomain:        "YOUR_PROJECT.firebaseapp.com",
-      projectId:         "YOUR_PROJECT_ID",
-      storageBucket:     "YOUR_PROJECT.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId:             "YOUR_APP_ID"
+      apiKey: "AIzaSyAY6gbe811e9sOX2Rumwu9tT4wax_ifk4o",
+      authDomain: "junon-b473b.firebaseapp.com",
+      projectId: "junon-b473b",
+      storageBucket: "junon-b473b.firebasestorage.app",
+      messagingSenderId: "758627702454",
+      appId: "1:758627702454:web:4bae8d3b4e139789327817",
+      measurementId: "G-XCPH335HBQ"
     };
-    // ▲▲▲  END CONFIG  ▲▲▲
 
     const app  = initializeApp(firebaseConfig);
     const auth = getAuth(app);
