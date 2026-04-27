@@ -1,719 +1,495 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>JUNON // SECTOR COMMAND</title>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet"/>
-  <style>
-    :root {
-      --void: #01020a;
-      --deep: #050b1a;
-      --panel: rgba(6, 18, 40, 0.85);
-      --border: rgba(0, 210, 255, 0.25);
-      --glow: #00d2ff;
-      --glow2: #7f5af0;
-      --accent: #ff4d6d;
-      --text: #c8e6f0;
-      --dim: rgba(200, 230, 240, 0.45);
-      --hud: rgba(0, 210, 255, 0.08);
+  <title>JUNON // TRANSMISSIONS</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&family=Exo+2:ital,wght@0,300;0,400;0,600;1,300&display=swap" rel="stylesheet"/>
+
+  <!-- ╔══════════════════════════════════════════════════════════╗
+       ║  FIREBASE SETUP  — swap in your config to go live       ║
+       ║  1. console.firebase.google.com → New project           ║
+       ║  2. Add Web App → copy the firebaseConfig block         ║
+       ║  3. Authentication → Sign-in method → Google → Enable   ║
+       ║  4. Firestore Database → Create → Start in test mode    ║
+       ║  5. Authentication → Settings → Add your github.io URL  ║
+       ╚══════════════════════════════════════════════════════════╝ -->
+  <script type="module">
+    import { initializeApp }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // ▼▼▼  PASTE YOUR FIREBASE CONFIG HERE  ▼▼▼
+    const firebaseConfig = {
+      apiKey:            "YOUR_API_KEY",
+      authDomain:        "YOUR_PROJECT.firebaseapp.com",
+      projectId:         "YOUR_PROJECT_ID",
+      storageBucket:     "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId:             "YOUR_APP_ID"
+    };
+    // ▲▲▲  END CONFIG  ▲▲▲
+
+    const app  = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    // ── State ──
+    let currentUser = null;
+    let allPosts    = [];
+    let activeTag   = null;
+
+    // ── DOM ──
+    const loginBtn      = document.getElementById('login-btn');
+    const userChip      = document.getElementById('user-chip');
+    const userAvatar    = document.getElementById('user-avatar');
+    const userName      = document.getElementById('user-name');
+    const logoutBtn     = document.getElementById('logout-btn');
+    const newPostBtn    = document.getElementById('new-post-btn');
+    const searchInput   = document.getElementById('search-input');
+    const tagCloud      = document.getElementById('tag-cloud');
+    const postsGrid     = document.getElementById('posts-grid');
+    const modal         = document.getElementById('post-modal');
+    const modalClose    = document.getElementById('modal-close');
+    const postForm      = document.getElementById('post-form');
+    const submitBtn     = document.getElementById('submit-post');
+    const emptyState    = document.getElementById('empty-state');
+    const postCount     = document.getElementById('post-count');
+    const configBanner  = document.getElementById('config-banner');
+
+    // ── Auth state ──
+    onAuthStateChanged(auth, user => {
+      currentUser = user;
+      if (user) {
+        loginBtn.style.display   = 'none';
+        userChip.style.display   = 'flex';
+        newPostBtn.style.display = 'flex';
+        userAvatar.src           = user.photoURL || '';
+        userName.textContent     = user.displayName?.split(' ')[0] || 'Pilot';
+      } else {
+        loginBtn.style.display   = 'flex';
+        userChip.style.display   = 'none';
+        newPostBtn.style.display = 'none';
+      }
+    });
+
+    loginBtn.addEventListener('click', async () => {
+      try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+      catch(e) { showToast('Sign-in failed — check Firebase config', 'error'); }
+    });
+    logoutBtn.addEventListener('click', () => signOut(auth));
+
+    // ── Load posts ──
+    async function loadPosts() {
+      try {
+        const snap = await getDocs(query(collection(db,'posts'), orderBy('createdAt','desc')));
+        allPosts = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+        configBanner.style.display = 'none';
+      } catch(e) {
+        configBanner.style.display = 'flex';
+        allPosts = DEMO_POSTS;
+      }
+      renderAll();
     }
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    html { scroll-behavior: smooth; }
-
-    body {
-      background: var(--void);
-      color: var(--text);
-      font-family: 'Exo 2', sans-serif;
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    /* ── STARFIELD ── */
-    #starfield {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
-    }
-
-    /* ── NEBULA BG ── */
-    .nebula {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      background:
-        radial-gradient(ellipse 60% 50% at 80% 20%, rgba(127,90,240,0.18) 0%, transparent 70%),
-        radial-gradient(ellipse 50% 60% at 15% 75%, rgba(0,210,255,0.12) 0%, transparent 70%),
-        radial-gradient(ellipse 40% 40% at 50% 50%, rgba(255,77,109,0.07) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    /* ── SCANLINES ── */
-    .scanlines {
-      position: fixed;
-      inset: 0;
-      z-index: 1;
-      pointer-events: none;
-      background: repeating-linear-gradient(
-        to bottom,
-        transparent,
-        transparent 2px,
-        rgba(0,0,0,0.07) 2px,
-        rgba(0,0,0,0.07) 4px
+    // ── Render ──
+    function renderAll() {
+      const q = searchInput.value.toLowerCase().trim();
+      let posts = allPosts;
+      if (activeTag) posts = posts.filter(p => p.tags?.includes(activeTag));
+      if (q)         posts = posts.filter(p =>
+        p.title.toLowerCase().includes(q) ||
+        p.body.toLowerCase().includes(q)  ||
+        (p.tags||[]).some(t=>t.includes(q))
       );
+      renderPosts(posts);
+      renderTags();
+      postCount.textContent = posts.length;
     }
 
-    /* ── WRAPPER ── */
-    #app {
-      position: relative;
-      z-index: 2;
-      min-height: 100vh;
+    function renderPosts(posts) {
+      postsGrid.innerHTML = '';
+      emptyState.style.display = posts.length ? 'none' : 'flex';
+      posts.forEach((p, i) => {
+        const card = document.createElement('article');
+        card.className = 'post-card';
+        card.style.animationDelay = `${i*0.07}s`;
+        const date = p.createdAt?.toDate
+          ? p.createdAt.toDate().toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'})
+          : (p.createdAt || '');
+        const tagsHtml = (p.tags||[]).map(t =>
+          `<button class="tag-pill${activeTag===t?' active':''}" data-tag="${t}">${t}</button>`
+        ).join('');
+        card.innerHTML = `
+          <div class="card-inner">
+            <div class="card-head">
+              <div class="card-meta">
+                <img class="avatar" src="${p.authorPhoto||''}" alt="${escHtml(p.authorName||'')}"/>
+                <span class="meta-name">${escHtml(p.authorName||'Anonymous')}</span>
+                <span class="meta-dot">·</span>
+                <span class="meta-date">${date}</span>
+              </div>
+              <div class="card-tags">${tagsHtml}</div>
+            </div>
+            <h2 class="card-title">${escHtml(p.title)}</h2>
+            <p class="card-body">${escHtml(p.body).replace(/\n/g,'<br/>')}</p>
+          </div>`;
+        card.querySelectorAll('.tag-pill').forEach(btn => {
+          btn.addEventListener('click', e => {
+            e.stopPropagation();
+            activeTag = activeTag===btn.dataset.tag ? null : btn.dataset.tag;
+            renderAll();
+          });
+        });
+        postsGrid.appendChild(card);
+      });
     }
+
+    function renderTags() {
+      const counts = {};
+      allPosts.forEach(p => (p.tags||[]).forEach(t => counts[t]=(counts[t]||0)+1));
+      tagCloud.innerHTML = '';
+      const all = document.createElement('button');
+      all.className = 'tag-btn' + (!activeTag?' active':'');
+      all.textContent = 'ALL';
+      all.addEventListener('click', ()=>{ activeTag=null; renderAll(); });
+      tagCloud.appendChild(all);
+      Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([t,n]) => {
+        const btn = document.createElement('button');
+        btn.className = 'tag-btn' + (activeTag===t?' active':'');
+        btn.innerHTML = `${t} <span class="tag-n">${n}</span>`;
+        btn.addEventListener('click', ()=>{ activeTag=activeTag===t?null:t; renderAll(); });
+        tagCloud.appendChild(btn);
+      });
+    }
+
+    searchInput.addEventListener('input', renderAll);
+
+    // ── Modal ──
+    newPostBtn.addEventListener('click', ()=>{ modal.classList.add('open'); document.body.style.overflow='hidden'; });
+    modalClose.addEventListener('click', closeModal);
+    modal.addEventListener('click', e=>{ if(e.target===modal) closeModal(); });
+    function closeModal() {
+      modal.classList.remove('open');
+      document.body.style.overflow='';
+      postForm.reset();
+      document.getElementById('tag-pills').innerHTML='';
+      currentTags=[];
+    }
+
+    // ── Tag input ──
+    let currentTags = [];
+    const tagInput = document.getElementById('tag-input');
+    const tagPills = document.getElementById('tag-pills');
+
+    tagInput.addEventListener('keydown', e => {
+      if ((e.key==='Enter'||e.key===',') && tagInput.value.trim()) {
+        e.preventDefault();
+        const t = tagInput.value.trim().toLowerCase().replace(/[^a-z0-9\-]/g,'');
+        if (t && !currentTags.includes(t) && currentTags.length<5) {
+          currentTags.push(t);
+          const pill = document.createElement('span');
+          pill.className='m-tag';
+          pill.innerHTML=`${t}<button type="button" data-t="${t}">×</button>`;
+          pill.querySelector('button').addEventListener('click',()=>{
+            currentTags=currentTags.filter(x=>x!==t); pill.remove();
+          });
+          tagPills.appendChild(pill);
+        }
+        tagInput.value='';
+      }
+    });
+
+    // ── Submit ──
+    submitBtn.addEventListener('click', async () => {
+      const title = document.getElementById('post-title').value.trim();
+      const body  = document.getElementById('post-body').value.trim();
+      if (!title||!body) { showToast('Title and content required','error'); return; }
+      if (!currentUser)  { showToast('Please sign in first','error'); return; }
+      submitBtn.disabled=true; submitBtn.textContent='TRANSMITTING…';
+      try {
+        await addDoc(collection(db,'posts'),{
+          title, body, tags:currentTags,
+          authorName:  currentUser.displayName||'Anonymous',
+          authorPhoto: currentUser.photoURL||'',
+          authorId:    currentUser.uid,
+          createdAt:   serverTimestamp()
+        });
+        showToast('Transmission sent ✓','success');
+        closeModal();
+        await loadPosts();
+      } catch(e) {
+        showToast('Transmission failed — check Firebase config','error');
+      } finally {
+        submitBtn.disabled=false; submitBtn.textContent='TRANSMIT POST';
+      }
+    });
+
+    function showToast(msg, type='success') {
+      const t = document.createElement('div');
+      t.className=`toast toast-${type}`; t.textContent=msg;
+      document.getElementById('toasts').appendChild(t);
+      setTimeout(()=>t.classList.add('show'),10);
+      setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),400); },3200);
+    }
+
+    function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    const DEMO_POSTS=[
+      {id:'d1',title:'Welcome to JUNON Transmissions',body:'This is a demo post. Once you configure Firebase, anyone can sign in with Google and post here. All posts are stored in Firestore.',tags:['meta','welcome'],authorName:'Mathmaticians',authorPhoto:'',createdAt:'Apr 27, 2026'},
+      {id:'d2',title:'How to publish a post',body:"1. Click 'Sign in' in the top right and authenticate with your Google account.\n2. Once signed in, the 'New Post' button appears.\n3. Write your title, content, add some tags, and hit Transmit.\n4. Your post instantly appears on the board for everyone to see.",tags:['guide'],authorName:'Mathmaticians',authorPhoto:'',createdAt:'Apr 26, 2026'},
+    ];
+
+    loadPosts();
+  </script>
+
+  <style>
+    :root{
+      --void:#01020a;--deep:#050b1a;
+      --panel:rgba(6,18,40,0.88);--border:rgba(0,210,255,0.2);
+      --glow:#00d2ff;--glow2:#7f5af0;--accent:#ff4d6d;
+      --text:#c8e6f0;--dim:rgba(200,230,240,0.45);
+      --hud:rgba(0,210,255,0.05);--green:#2ecc71;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    html{scroll-behavior:smooth;}
+    body{background:var(--void);color:var(--text);font-family:'Exo 2',sans-serif;min-height:100vh;overflow-x:hidden;}
+
+    /* ── BG ── */
+    #starfield{position:fixed;inset:0;z-index:0;pointer-events:none;}
+    .nebula{position:fixed;inset:0;z-index:0;pointer-events:none;
+      background:radial-gradient(ellipse 65% 55% at 85% 10%,rgba(127,90,240,.15) 0%,transparent 70%),
+                 radial-gradient(ellipse 55% 65% at 10% 80%,rgba(0,210,255,.10) 0%,transparent 70%);}
+    .scanlines{position:fixed;inset:0;z-index:1;pointer-events:none;
+      background:repeating-linear-gradient(to bottom,transparent,transparent 2px,rgba(0,0,0,.06) 2px,rgba(0,0,0,.06) 4px);}
+    #app{position:relative;z-index:2;min-height:100vh;}
 
     /* ── NAV ── */
-    nav {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 18px 48px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(1, 2, 10, 0.7);
-      backdrop-filter: blur(12px);
-      position: sticky;
-      top: 0;
-      z-index: 100;
+    nav{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:0 48px;height:64px;gap:16px;
+      border-bottom:1px solid var(--border);
+      background:rgba(1,2,10,.8);backdrop-filter:blur(14px);
+      position:sticky;top:0;z-index:100;
     }
+    .nav-logo{font-family:'Orbitron',monospace;font-weight:900;font-size:1rem;letter-spacing:.2em;
+      color:var(--glow);text-shadow:0 0 16px var(--glow),0 0 40px rgba(0,210,255,.25);text-decoration:none;}
+    .nav-logo span{color:var(--accent);}
+    .nav-right{display:flex;align-items:center;gap:12px;}
 
-    .nav-logo {
-      font-family: 'Orbitron', monospace;
-      font-weight: 900;
-      font-size: 1.1rem;
-      letter-spacing: 0.2em;
-      color: var(--glow);
-      text-shadow: 0 0 16px var(--glow), 0 0 40px rgba(0,210,255,0.3);
-      text-decoration: none;
+    #login-btn{
+      display:flex;align-items:center;gap:10px;
+      font-family:'Share Tech Mono',monospace;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;
+      background:transparent;border:1px solid var(--border);color:var(--text);
+      padding:9px 20px;border-radius:3px;cursor:pointer;transition:all .25s;
     }
+    #login-btn:hover{border-color:var(--glow);color:var(--glow);box-shadow:0 0 20px rgba(0,210,255,.15);}
+    #login-btn svg{width:16px;height:16px;flex-shrink:0;}
 
-    .nav-logo span { color: var(--accent); }
+    #user-chip{display:none;align-items:center;gap:10px;}
+    .u-avatar{width:30px;height:30px;border-radius:50%;border:1px solid var(--glow);
+      box-shadow:0 0 8px rgba(0,210,255,.4);object-fit:cover;background:var(--hud);}
+    #user-name{font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--glow);letter-spacing:.1em;}
+    #logout-btn{font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;
+      background:transparent;border:1px solid rgba(255,77,109,.3);color:rgba(255,77,109,.7);
+      padding:6px 14px;border-radius:3px;cursor:pointer;transition:all .2s;}
+    #logout-btn:hover{border-color:var(--accent);color:var(--accent);}
 
-    .nav-links {
-      display: flex;
-      gap: 32px;
-      list-style: none;
+    #new-post-btn{
+      display:none;align-items:center;gap:8px;
+      font-family:'Orbitron',monospace;font-size:.68rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;
+      background:transparent;border:1.5px solid var(--glow);color:var(--glow);
+      padding:9px 22px;border-radius:3px;cursor:pointer;transition:all .25s;white-space:nowrap;
     }
+    #new-post-btn:hover{background:rgba(0,210,255,.08);box-shadow:0 0 28px rgba(0,210,255,.25);color:#fff;}
 
-    .nav-links a {
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.78rem;
-      letter-spacing: 0.15em;
-      color: var(--dim);
-      text-decoration: none;
-      text-transform: uppercase;
-      transition: color 0.2s, text-shadow 0.2s;
+    /* ── BANNER ── */
+    #config-banner{
+      display:none;align-items:center;gap:12px;
+      background:rgba(255,200,0,.07);border-bottom:1px solid rgba(255,200,0,.2);
+      color:rgba(255,220,80,.9);padding:13px 48px;
+      font-family:'Share Tech Mono',monospace;font-size:.7rem;letter-spacing:.08em;
     }
-
-    .nav-links a:hover {
-      color: var(--glow);
-      text-shadow: 0 0 10px var(--glow);
-    }
-
-    .nav-status {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.72rem;
-      color: #2ecc71;
-      letter-spacing: 0.1em;
-    }
-
-    .status-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: #2ecc71;
-      box-shadow: 0 0 8px #2ecc71;
-      animation: pulse 2s ease-in-out infinite;
-    }
+    #config-banner a{color:var(--glow);text-decoration:none;}
+    #config-banner a:hover{text-decoration:underline;}
 
     /* ── HERO ── */
-    .hero {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 80px 24px 40px;
-      position: relative;
+    .hero{
+      padding:90px 48px 60px;border-bottom:1px solid var(--border);
+      display:flex;flex-direction:column;align-items:flex-start;gap:0;
     }
-
-    .hero-tag {
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.72rem;
-      letter-spacing: 0.3em;
-      color: var(--glow);
-      text-transform: uppercase;
-      margin-bottom: 24px;
-      opacity: 0;
-      animation: fadeUp 0.7s 0.2s forwards;
+    .hero-eyebrow{font-family:'Share Tech Mono',monospace;font-size:.7rem;letter-spacing:.3em;color:var(--glow);margin-bottom:18px;}
+    .hero-eyebrow::before{content:'[ ';}.hero-eyebrow::after{content:' ]';}
+    .hero h1{
+      font-family:'Orbitron',monospace;font-weight:900;
+      font-size:clamp(2.4rem,6vw,5.5rem);letter-spacing:.04em;
+      color:#fff;text-shadow:0 0 40px rgba(0,210,255,.18);line-height:1.05;
     }
+    .hero h1 em{color:var(--glow);font-style:normal;}
+    .hero-sub{margin-top:22px;font-size:1rem;color:var(--dim);font-weight:300;line-height:1.8;max-width:520px;letter-spacing:.03em;}
 
-    .hero-tag::before { content: '[ '; }
-    .hero-tag::after  { content: ' ]'; }
+    /* ── BLOG ── */
+    .blog{padding:60px 48px;max-width:1400px;margin:0 auto;}
 
-    .hero h1 {
-      font-family: 'Orbitron', monospace;
-      font-weight: 900;
-      font-size: clamp(2.8rem, 8vw, 7rem);
-      line-height: 1;
-      letter-spacing: 0.05em;
-      color: #fff;
-      text-shadow:
-        0 0 30px var(--glow),
-        0 0 80px rgba(0,210,255,0.2);
-      opacity: 0;
-      animation: fadeUp 0.8s 0.4s forwards;
-      position: relative;
+    .controls{display:flex;align-items:center;gap:14px;margin-bottom:28px;flex-wrap:wrap;}
+    .search-wrap{flex:1;min-width:200px;position:relative;}
+    .search-wrap svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--dim);pointer-events:none;}
+    #search-input{
+      width:100%;background:var(--hud);border:1px solid var(--border);
+      color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.78rem;letter-spacing:.08em;
+      padding:12px 16px 12px 40px;border-radius:3px;outline:none;transition:border-color .2s;
     }
+    #search-input:focus{border-color:rgba(0,210,255,.5);}
+    #search-input::placeholder{color:var(--dim);}
+    .counter{font-family:'Share Tech Mono',monospace;font-size:.7rem;color:var(--dim);letter-spacing:.1em;white-space:nowrap;}
+    #post-count{color:var(--glow);}
 
-    .hero h1 .accent { color: var(--glow); }
-
-    .hero-sub {
-      margin-top: 28px;
-      font-size: 1.1rem;
-      font-weight: 300;
-      color: var(--dim);
-      max-width: 560px;
-      line-height: 1.7;
-      letter-spacing: 0.04em;
-      opacity: 0;
-      animation: fadeUp 0.8s 0.6s forwards;
+    #tag-cloud{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:40px;}
+    .tag-btn{
+      font-family:'Share Tech Mono',monospace;font-size:.63rem;letter-spacing:.12em;text-transform:uppercase;
+      background:transparent;border:1px solid var(--border);color:var(--dim);
+      padding:6px 14px;border-radius:2px;cursor:pointer;transition:all .2s;
+      display:flex;align-items:center;gap:6px;
     }
+    .tag-btn:hover,.tag-btn.active{border-color:var(--glow);color:var(--glow);background:rgba(0,210,255,.06);box-shadow:0 0 12px rgba(0,210,255,.1);}
+    .tag-n{color:var(--glow);font-size:.58rem;}
 
-    .hero-ctas {
-      margin-top: 48px;
-      display: flex;
-      gap: 20px;
-      flex-wrap: wrap;
-      justify-content: center;
-      opacity: 0;
-      animation: fadeUp 0.8s 0.8s forwards;
+    /* ── GRID ── */
+    #posts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:2px;}
+
+    .post-card{
+      background:var(--panel);border:1px solid var(--border);
+      position:relative;overflow:hidden;
+      animation:fadeUp .5s both;transition:border-color .25s,transform .25s;
     }
-
-    .btn {
-      font-family: 'Orbitron', monospace;
-      font-size: 0.75rem;
-      font-weight: 700;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      padding: 14px 36px;
-      border-radius: 3px;
-      cursor: pointer;
-      text-decoration: none;
-      transition: all 0.25s;
-      position: relative;
-      overflow: hidden;
+    .post-card::after{
+      content:'';position:absolute;top:0;left:0;right:0;height:1px;
+      background:linear-gradient(90deg,transparent,rgba(0,210,255,.4),transparent);
+      opacity:0;transition:opacity .3s;
     }
-
-    .btn-primary {
-      background: transparent;
-      border: 1.5px solid var(--glow);
-      color: var(--glow);
-      box-shadow: 0 0 20px rgba(0,210,255,0.15), inset 0 0 20px rgba(0,210,255,0.04);
+    .post-card:hover{border-color:rgba(0,210,255,.4);transform:translateY(-2px);}
+    .post-card:hover::after{opacity:1;}
+    .card-inner{padding:30px 26px;}
+    .card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:8px;}
+    .card-meta{display:flex;align-items:center;gap:8px;}
+    .avatar{width:24px;height:24px;border-radius:50%;border:1px solid var(--border);object-fit:cover;background:var(--hud);}
+    .meta-name{font-family:'Share Tech Mono',monospace;font-size:.68rem;color:var(--glow);letter-spacing:.07em;}
+    .meta-dot{color:var(--border);}
+    .meta-date{font-family:'Share Tech Mono',monospace;font-size:.65rem;color:var(--dim);letter-spacing:.05em;}
+    .card-tags{display:flex;gap:5px;flex-wrap:wrap;}
+    .tag-pill{
+      font-family:'Share Tech Mono',monospace;font-size:.58rem;letter-spacing:.1em;
+      background:rgba(0,210,255,.06);border:1px solid rgba(0,210,255,.18);
+      color:rgba(0,210,255,.7);padding:3px 9px;border-radius:2px;
+      cursor:pointer;transition:all .2s;text-transform:lowercase;
     }
+    .tag-pill:hover,.tag-pill.active{background:rgba(0,210,255,.12);color:var(--glow);border-color:var(--glow);}
+    .card-title{font-family:'Orbitron',monospace;font-weight:700;font-size:.95rem;letter-spacing:.04em;color:#fff;margin-bottom:12px;line-height:1.35;}
+    .card-body{font-size:.87rem;color:var(--dim);line-height:1.85;}
 
-    .btn-primary::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(90deg, transparent, rgba(0,210,255,0.12), transparent);
-      transform: translateX(-100%);
-      transition: transform 0.4s;
+    #empty-state{
+      display:none;flex-direction:column;align-items:center;justify-content:center;
+      grid-column:1/-1;padding:100px 20px;text-align:center;gap:14px;
     }
+    .empty-ico{font-size:3rem;opacity:.35;}
+    #empty-state p{font-family:'Share Tech Mono',monospace;font-size:.75rem;letter-spacing:.15em;color:var(--dim);}
 
-    .btn-primary:hover::before { transform: translateX(100%); }
-    .btn-primary:hover {
-      background: rgba(0,210,255,0.08);
-      box-shadow: 0 0 40px rgba(0,210,255,0.35), inset 0 0 30px rgba(0,210,255,0.08);
-      color: #fff;
+    /* ── MODAL ── */
+    #post-modal{
+      position:fixed;inset:0;z-index:500;
+      background:rgba(1,2,10,.88);backdrop-filter:blur(10px);
+      display:flex;align-items:center;justify-content:center;padding:20px;
+      opacity:0;pointer-events:none;transition:opacity .3s;
     }
-
-    .btn-secondary {
-      background: transparent;
-      border: 1.5px solid rgba(127,90,240,0.5);
-      color: rgba(200,180,255,0.8);
+    #post-modal.open{opacity:1;pointer-events:all;}
+    .modal-box{
+      background:rgba(4,10,24,.98);border:1px solid rgba(0,210,255,.3);
+      width:100%;max-width:640px;max-height:90vh;overflow-y:auto;
+      padding:44px 40px;position:relative;
+      box-shadow:0 0 60px rgba(0,210,255,.1),0 0 120px rgba(127,90,240,.07);
+      transform:translateY(24px);transition:transform .35s;
     }
+    #post-modal.open .modal-box{transform:translateY(0);}
+    .modal-box::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+      background:linear-gradient(90deg,transparent,var(--glow),transparent);}
+    #modal-close{position:absolute;top:18px;right:22px;
+      background:none;border:none;color:var(--dim);font-size:1.5rem;cursor:pointer;line-height:1;transition:color .2s;}
+    #modal-close:hover{color:var(--accent);}
+    .modal-h{font-family:'Orbitron',monospace;font-weight:700;font-size:1rem;letter-spacing:.12em;color:#fff;margin-bottom:30px;}
+    .modal-h span{color:var(--glow);}
 
-    .btn-secondary:hover {
-      border-color: var(--glow2);
-      background: rgba(127,90,240,0.1);
-      box-shadow: 0 0 30px rgba(127,90,240,0.25);
-      color: #fff;
+    .fg{margin-bottom:20px;}
+    .fl{display:block;font-family:'Share Tech Mono',monospace;font-size:.65rem;
+      letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-bottom:9px;}
+    .fi,.ft{
+      width:100%;background:rgba(0,210,255,.04);border:1px solid var(--border);
+      color:var(--text);font-family:'Exo 2',sans-serif;font-size:.9rem;
+      padding:12px 15px;border-radius:3px;outline:none;transition:border-color .2s;resize:none;
     }
+    .fi:focus,.ft:focus{border-color:rgba(0,210,255,.5);}
+    .fi::placeholder,.ft::placeholder{color:var(--dim);}
+    .ft{min-height:155px;line-height:1.7;}
 
-    /* ── HUD STATS ── */
-    .hud-bar {
-      margin-top: 80px;
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 2px;
-      max-width: 680px;
-      width: 100%;
-      opacity: 0;
-      animation: fadeUp 0.8s 1s forwards;
+    .tag-wrap{
+      background:rgba(0,210,255,.04);border:1px solid var(--border);
+      border-radius:3px;padding:9px 11px;display:flex;flex-wrap:wrap;gap:7px;
+      cursor:text;transition:border-color .2s;
     }
-
-    .hud-stat {
-      background: var(--hud);
-      border: 1px solid var(--border);
-      padding: 20px 28px;
-      text-align: center;
-      position: relative;
+    .tag-wrap:focus-within{border-color:rgba(0,210,255,.5);}
+    .m-tag{
+      display:inline-flex;align-items:center;gap:5px;
+      background:rgba(0,210,255,.1);border:1px solid rgba(0,210,255,.28);
+      color:var(--glow);font-family:'Share Tech Mono',monospace;font-size:.63rem;
+      letter-spacing:.07em;padding:4px 9px;border-radius:2px;
     }
+    .m-tag button{background:none;border:none;color:var(--dim);cursor:pointer;font-size:.9rem;line-height:1;padding:0;}
+    .m-tag button:hover{color:var(--accent);}
+    #tag-input{background:none;border:none;outline:none;color:var(--text);
+      font-family:'Share Tech Mono',monospace;font-size:.75rem;min-width:120px;flex:1;}
+    #tag-input::placeholder{color:var(--dim);}
+    .tag-hint{font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--dim);margin-top:6px;letter-spacing:.05em;}
 
-    .hud-stat::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--glow), transparent);
-      opacity: 0.6;
+    #submit-post{
+      width:100%;margin-top:8px;
+      font-family:'Orbitron',monospace;font-weight:700;font-size:.75rem;
+      letter-spacing:.2em;text-transform:uppercase;
+      background:transparent;border:1.5px solid var(--glow);color:var(--glow);
+      padding:15px;border-radius:3px;cursor:pointer;transition:all .25s;
     }
-
-    .hud-num {
-      font-family: 'Orbitron', monospace;
-      font-size: 1.8rem;
-      font-weight: 700;
-      color: var(--glow);
-      text-shadow: 0 0 16px var(--glow);
-    }
-
-    .hud-label {
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.62rem;
-      letter-spacing: 0.2em;
-      color: var(--dim);
-      text-transform: uppercase;
-      margin-top: 4px;
-    }
-
-    /* ── SECTION ── */
-    section {
-      padding: 100px 48px;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-
-    .section-label {
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.7rem;
-      letter-spacing: 0.35em;
-      color: var(--glow);
-      text-transform: uppercase;
-      margin-bottom: 14px;
-    }
-
-    .section-label::before { content: '▸ '; }
-
-    .section-title {
-      font-family: 'Orbitron', monospace;
-      font-weight: 700;
-      font-size: clamp(1.6rem, 4vw, 2.8rem);
-      color: #fff;
-      letter-spacing: 0.04em;
-      margin-bottom: 60px;
-      text-shadow: 0 0 20px rgba(0,210,255,0.15);
-    }
-
-    /* ── CARDS ── */
-    .card-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 2px;
-    }
-
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      padding: 36px 32px;
-      position: relative;
-      transition: all 0.3s;
-      cursor: default;
-      overflow: hidden;
-    }
-
-    .card::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, rgba(0,210,255,0.04) 0%, transparent 60%);
-      opacity: 0;
-      transition: opacity 0.3s;
-    }
-
-    .card:hover::after { opacity: 1; }
-    .card:hover { border-color: rgba(0,210,255,0.5); transform: translateY(-2px); }
-
-    .card-icon {
-      font-size: 1.8rem;
-      margin-bottom: 20px;
-      display: block;
-    }
-
-    .card-num {
-      position: absolute;
-      top: 16px; right: 20px;
-      font-family: 'Orbitron', monospace;
-      font-size: 0.65rem;
-      color: var(--border);
-      letter-spacing: 0.1em;
-    }
-
-    .card h3 {
-      font-family: 'Orbitron', monospace;
-      font-weight: 600;
-      font-size: 0.95rem;
-      letter-spacing: 0.1em;
-      color: #fff;
-      margin-bottom: 14px;
-    }
-
-    .card p {
-      font-size: 0.9rem;
-      color: var(--dim);
-      line-height: 1.75;
-    }
-
-    /* ── TIMELINE ── */
-    .timeline {
-      position: relative;
-      padding-left: 40px;
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-    }
-
-    .timeline::before {
-      content: '';
-      position: absolute;
-      left: 7px; top: 8px; bottom: 8px;
-      width: 1px;
-      background: linear-gradient(to bottom, var(--glow), var(--glow2), transparent);
-      opacity: 0.4;
-    }
-
-    .tl-item {
-      padding: 28px 0;
-      border-bottom: 1px solid var(--border);
-      position: relative;
-    }
-
-    .tl-item:last-child { border-bottom: none; }
-
-    .tl-dot {
-      position: absolute;
-      left: -36px; top: 34px;
-      width: 14px; height: 14px;
-      border-radius: 50%;
-      border: 1.5px solid var(--glow);
-      background: var(--void);
-      box-shadow: 0 0 10px var(--glow);
-    }
-
-    .tl-date {
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.68rem;
-      color: var(--glow);
-      letter-spacing: 0.15em;
-      margin-bottom: 8px;
-    }
-
-    .tl-item h3 {
-      font-family: 'Orbitron', monospace;
-      font-size: 0.9rem;
-      font-weight: 600;
-      color: #fff;
-      margin-bottom: 8px;
-      letter-spacing: 0.05em;
-    }
-
-    .tl-item p {
-      font-size: 0.88rem;
-      color: var(--dim);
-      line-height: 1.7;
-    }
+    #submit-post:hover:not(:disabled){background:rgba(0,210,255,.08);box-shadow:0 0 30px rgba(0,210,255,.2);color:#fff;}
+    #submit-post:disabled{opacity:.5;cursor:not-allowed;}
 
     /* ── FOOTER ── */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 40px 48px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.7rem;
-      color: var(--dim);
-      letter-spacing: 0.1em;
+    footer{
+      border-top:1px solid var(--border);padding:28px 48px;
+      display:flex;justify-content:space-between;align-items:center;
+      font-family:'Share Tech Mono',monospace;font-size:.64rem;color:var(--dim);letter-spacing:.1em;
     }
+    .f-logo{font-family:'Orbitron',monospace;font-weight:700;color:var(--glow);text-shadow:0 0 10px var(--glow);}
 
-    .footer-logo {
-      font-family: 'Orbitron', monospace;
-      font-weight: 700;
-      color: var(--glow);
-      text-shadow: 0 0 10px var(--glow);
+    /* ── TOAST ── */
+    #toasts{position:fixed;bottom:30px;right:30px;z-index:9999;display:flex;flex-direction:column;gap:9px;}
+    .toast{
+      font-family:'Share Tech Mono',monospace;font-size:.7rem;letter-spacing:.08em;
+      padding:12px 18px;border-radius:3px;
+      opacity:0;transform:translateX(14px);transition:all .35s;white-space:nowrap;
     }
+    .toast.show{opacity:1;transform:translateX(0);}
+    .toast-success{background:rgba(46,204,113,.12);border:1px solid rgba(46,204,113,.3);color:var(--green);}
+    .toast-error{background:rgba(255,77,109,.12);border:1px solid rgba(255,77,109,.3);color:var(--accent);}
 
-    /* ── CORNER DECORATIONS ── */
-    .corner-wrap {
-      position: relative;
-    }
+    @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
 
-    .corner-wrap::before,
-    .corner-wrap::after {
-      content: '';
-      position: absolute;
-      width: 16px; height: 16px;
-      border-color: var(--glow);
-      border-style: solid;
-      opacity: 0.5;
-    }
-
-    .corner-wrap::before {
-      top: -1px; left: -1px;
-      border-width: 1.5px 0 0 1.5px;
-    }
-
-    .corner-wrap::after {
-      bottom: -1px; right: -1px;
-      border-width: 0 1.5px 1.5px 0;
-    }
-
-    /* ── DIVIDER ── */
-    .divider {
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--border), transparent);
-      margin: 0 48px;
-    }
-
-    /* ── ANIMATIONS ── */
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(24px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; box-shadow: 0 0 8px #2ecc71; }
-      50%       { opacity: 0.5; box-shadow: 0 0 3px #2ecc71; }
-    }
-
-    @keyframes twinkle {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.2; }
-    }
-
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to   { transform: rotate(360deg); }
-    }
-
-    /* ── PLANET ── */
-    .planet-wrap {
-      position: absolute;
-      right: 6vw;
-      top: 50%;
-      transform: translateY(-50%);
-      pointer-events: none;
-      opacity: 0;
-      animation: fadeUp 1.2s 0.5s forwards;
-    }
-
-    .planet {
-      width: 260px; height: 260px;
-      border-radius: 50%;
-      background: radial-gradient(circle at 35% 35%,
-        #1a3a6e 0%,
-        #0d1f3c 40%,
-        #050b1a 100%
-      );
-      box-shadow:
-        0 0 0 1px rgba(0,210,255,0.12),
-        0 0 60px rgba(0,210,255,0.1),
-        inset -30px -20px 50px rgba(127,90,240,0.25),
-        inset 20px 15px 40px rgba(0,210,255,0.08);
-      position: relative;
-    }
-
-    .planet::before {
-      content: '';
-      position: absolute;
-      inset: -40px;
-      border-radius: 50%;
-      border: 1px solid rgba(0,210,255,0.08);
-      animation: spin 25s linear infinite;
-    }
-
-    .planet::after {
-      content: '';
-      position: absolute;
-      top: 50%; left: -60px; right: -60px;
-      height: 22px;
-      margin-top: -11px;
-      background: linear-gradient(90deg,
-        transparent 0%,
-        rgba(0,210,255,0.06) 20%,
-        rgba(127,90,240,0.14) 50%,
-        rgba(0,210,255,0.06) 80%,
-        transparent 100%
-      );
-      border-radius: 50%;
-      border: 1px solid rgba(0,210,255,0.12);
-      transform: rotateX(70deg);
-    }
-
-    .orbit-dot {
-      position: absolute;
-      top: 50%; left: -40px;
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--glow);
-      box-shadow: 0 0 10px var(--glow);
-      animation: spin 8s linear infinite;
-      transform-origin: calc(50% + 40px) 50%;
-    }
-
-    /* ── PROGRESS BARS ── */
-    .skills-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 32px 64px;
-    }
-
-    .skill-bar {
-      position: relative;
-    }
-
-    .skill-top {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 10px;
-    }
-
-    .skill-name {
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.72rem;
-      letter-spacing: 0.1em;
-      color: var(--text);
-      text-transform: uppercase;
-    }
-
-    .skill-pct {
-      font-family: 'Orbitron', monospace;
-      font-size: 0.7rem;
-      color: var(--glow);
-    }
-
-    .bar-track {
-      height: 4px;
-      background: rgba(0,210,255,0.1);
-      border-radius: 2px;
-      overflow: visible;
-      position: relative;
-    }
-
-    .bar-fill {
-      height: 100%;
-      border-radius: 2px;
-      background: linear-gradient(90deg, var(--glow2), var(--glow));
-      box-shadow: 0 0 12px var(--glow);
-      width: 0;
-      transition: width 1.5s cubic-bezier(0.16, 1, 0.3, 1);
-      position: relative;
-    }
-
-    .bar-fill::after {
-      content: '';
-      position: absolute;
-      right: -1px; top: -4px;
-      width: 2px; height: 12px;
-      background: #fff;
-      box-shadow: 0 0 8px var(--glow);
-      border-radius: 1px;
-    }
-
-    /* ── CONTACT PANEL ── */
-    .contact-panel {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 2px;
-    }
-
-    .contact-card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      padding: 40px;
-      transition: border-color 0.3s;
-    }
-
-    .contact-card:hover { border-color: rgba(0,210,255,0.5); }
-
-    .contact-card h3 {
-      font-family: 'Orbitron', monospace;
-      font-size: 0.85rem;
-      letter-spacing: 0.12em;
-      color: #fff;
-      margin-bottom: 12px;
-    }
-
-    .contact-card p {
-      font-size: 0.88rem;
-      color: var(--dim);
-      line-height: 1.7;
-      margin-bottom: 24px;
-    }
-
-    .link-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .ext-link {
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.72rem;
-      letter-spacing: 0.1em;
-      color: var(--glow);
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      transition: all 0.2s;
-    }
-
-    .ext-link::before {
-      content: '→';
-      transition: transform 0.2s;
-    }
-
-    .ext-link:hover {
-      color: #fff;
-      text-shadow: 0 0 10px var(--glow);
-    }
-
-    .ext-link:hover::before { transform: translateX(4px); }
-
-    @media (max-width: 768px) {
-      nav { padding: 16px 20px; }
-      .nav-links { display: none; }
-      section { padding: 60px 20px; }
-      .hero h1 { font-size: 2.6rem; }
-      .hud-bar { grid-template-columns: 1fr; }
-      .planet-wrap { display: none; }
-      .skills-grid { grid-template-columns: 1fr; }
-      .contact-panel { grid-template-columns: 1fr; }
-      footer { flex-direction: column; gap: 12px; text-align: center; }
+    @media(max-width:768px){
+      nav{padding:0 18px;}
+      .hero{padding:50px 20px 40px;}
+      .blog{padding:40px 20px;}
+      #posts-grid{grid-template-columns:1fr;}
+      .modal-box{padding:30px 20px;}
+      footer{flex-direction:column;gap:10px;text-align:center;}
     }
   </style>
 </head>
@@ -728,276 +504,137 @@
   <!-- NAV -->
   <nav>
     <a class="nav-logo" href="#">JUN<span>.</span>ON</a>
-    <ul class="nav-links">
-      <li><a href="#about">Profile</a></li>
-      <li><a href="#skills">Systems</a></li>
-      <li><a href="#projects">Missions</a></li>
-      <li><a href="#contact">Comms</a></li>
-    </ul>
-    <div class="nav-status">
-      <div class="status-dot"></div>
-      ONLINE // SECTOR&nbsp;7
+    <div class="nav-right">
+      <button id="new-post-btn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        NEW POST
+      </button>
+      <button id="login-btn">
+        <!-- Google G icon -->
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+        </svg>
+        SIGN IN
+      </button>
+      <div id="user-chip">
+        <img id="user-avatar" class="u-avatar" src="" alt=""/>
+        <span id="user-name"></span>
+        <button id="logout-btn">SIGN OUT</button>
+      </div>
     </div>
   </nav>
 
-  <!-- HERO -->
-  <div class="hero">
-    <div class="planet-wrap">
-      <div class="planet">
-        <div class="orbit-dot"></div>
-      </div>
-    </div>
-
-    <p class="hero-tag">Mathmaticians · Est. 2024</p>
-    <h1>JUNON<br><span class="accent">COMMAND</span></h1>
-    <p class="hero-sub">
-      Navigating the frontier of mathematics and computation. 
-      Exploring deep structures where logic meets the cosmos.
-    </p>
-    <div class="hero-ctas">
-      <a href="#projects" class="btn btn-primary">LAUNCH MISSIONS</a>
-      <a href="#about" class="btn btn-secondary">VIEW PROFILE</a>
-    </div>
-
-    <div class="hud-bar">
-      <div class="hud-stat">
-        <div class="hud-num">06</div>
-        <div class="hud-label">Commits</div>
-      </div>
-      <div class="hud-stat">
-        <div class="hud-num">01</div>
-        <div class="hud-label">Branch</div>
-      </div>
-      <div class="hud-stat">
-        <div class="hud-num">∞</div>
-        <div class="hud-label">Potential</div>
-      </div>
-    </div>
+  <!-- CONFIG BANNER -->
+  <div id="config-banner">
+    ⚠ &nbsp;DEMO MODE — Firebase not yet configured. Posts won't persist across sessions.
+    &nbsp;<a href="https://console.firebase.google.com" target="_blank">Set up Firebase →</a>
   </div>
 
-  <div class="divider"></div>
+  <!-- HERO -->
+  <header class="hero">
+    <p class="hero-eyebrow">Junon · Community Board</p>
+    <h1>THE <em>OPEN</em><br>SIGNAL BOARD</h1>
+    <p class="hero-sub">A public space for the Mathmaticians community. Sign in with Google, write a post, add tags — your signal reaches the whole network instantly.</p>
+  </header>
 
-  <!-- ABOUT -->
-  <section id="about">
-    <p class="section-label">Profile Data</p>
-    <h2 class="section-title">COMMANDER BRIEF</h2>
-    <div class="card-grid">
-      <div class="card corner-wrap">
-        <span class="card-num">01</span>
-        <span class="card-icon">🌌</span>
-        <h3>ORIGIN</h3>
-        <p>Launched from the Mathmaticians collective — a crew dedicated to pushing the boundaries of mathematical thinking and creative problem-solving.</p>
+  <!-- BLOG -->
+  <main class="blog">
+    <div class="controls">
+      <div class="search-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input id="search-input" type="text" placeholder="SEARCH TRANSMISSIONS…" autocomplete="off"/>
       </div>
-      <div class="card corner-wrap">
-        <span class="card-num">02</span>
-        <span class="card-icon">🛸</span>
-        <h3>MISSION</h3>
-        <p>To build, learn, and deploy projects that bridge elegant theory with real-world impact. Every commit is a step further into the unknown.</p>
-      </div>
-      <div class="card corner-wrap">
-        <span class="card-num">03</span>
-        <span class="card-icon">⚡</span>
-        <h3>OBJECTIVE</h3>
-        <p>Constant iteration. Deploy fast, learn faster. Build tools and systems that matter — with precision, creativity, and relentless curiosity.</p>
+      <p class="counter">SIGNALS:&nbsp;<span id="post-count">0</span></p>
+    </div>
+
+    <div id="tag-cloud"></div>
+
+    <div id="posts-grid">
+      <div id="empty-state">
+        <div class="empty-ico">📡</div>
+        <p>NO TRANSMISSIONS FOUND</p>
       </div>
     </div>
-  </section>
+  </main>
 
-  <div class="divider"></div>
-
-  <!-- SKILLS -->
-  <section id="skills">
-    <p class="section-label">System Diagnostics</p>
-    <h2 class="section-title">SKILL MATRIX</h2>
-    <div class="skills-grid" id="skills-grid">
-      <div class="skill-bar">
-        <div class="skill-top">
-          <span class="skill-name">Mathematics</span>
-          <span class="skill-pct">95%</span>
-        </div>
-        <div class="bar-track"><div class="bar-fill" data-width="95"></div></div>
-      </div>
-      <div class="skill-bar">
-        <div class="skill-top">
-          <span class="skill-name">Web Development</span>
-          <span class="skill-pct">82%</span>
-        </div>
-        <div class="bar-track"><div class="bar-fill" data-width="82"></div></div>
-      </div>
-      <div class="skill-bar">
-        <div class="skill-top">
-          <span class="skill-name">Algorithms</span>
-          <span class="skill-pct">88%</span>
-        </div>
-        <div class="bar-track"><div class="bar-fill" data-width="88"></div></div>
-      </div>
-      <div class="skill-bar">
-        <div class="skill-top">
-          <span class="skill-name">Problem Solving</span>
-          <span class="skill-pct">90%</span>
-        </div>
-        <div class="bar-track"><div class="bar-fill" data-width="90"></div></div>
-      </div>
-      <div class="skill-bar">
-        <div class="skill-top">
-          <span class="skill-name">Data Analysis</span>
-          <span class="skill-pct">76%</span>
-        </div>
-        <div class="bar-track"><div class="bar-fill" data-width="76"></div></div>
-      </div>
-      <div class="skill-bar">
-        <div class="skill-top">
-          <span class="skill-name">Creative Design</span>
-          <span class="skill-pct">70%</span>
-        </div>
-        <div class="bar-track"><div class="bar-fill" data-width="70"></div></div>
-      </div>
-    </div>
-  </section>
-
-  <div class="divider"></div>
-
-  <!-- MISSIONS / PROJECTS -->
-  <section id="projects">
-    <p class="section-label">Mission Log</p>
-    <h2 class="section-title">ACTIVE OPERATIONS</h2>
-    <div class="timeline">
-      <div class="tl-item">
-        <div class="tl-dot"></div>
-        <div class="tl-date">MISSION 001 // ACTIVE</div>
-        <h3>JUNON COMMAND — SITE LAUNCH</h3>
-        <p>Establishing the primary hub. Building a public-facing interface to showcase mathematical explorations, projects, and research to the world.</p>
-      </div>
-      <div class="tl-item">
-        <div class="tl-dot"></div>
-        <div class="tl-date">MISSION 002 // QUEUED</div>
-        <h3>PROJECT DELTA — MATH EXPLORER</h3>
-        <p>An interactive tool for visualizing complex mathematical concepts. Planned deployment upon completion of primary infrastructure.</p>
-      </div>
-      <div class="tl-item">
-        <div class="tl-dot"></div>
-        <div class="tl-date">MISSION 003 // CLASSIFIED</div>
-        <h3>OPERATION SIGMA — TBA</h3>
-        <p>Details are restricted. Clearance required. Stand by for further transmissions from Sector Command.</p>
-      </div>
-    </div>
-  </section>
-
-  <div class="divider"></div>
-
-  <!-- CONTACT -->
-  <section id="contact">
-    <p class="section-label">Open Channel</p>
-    <h2 class="section-title">ESTABLISH COMMS</h2>
-    <div class="contact-panel">
-      <div class="contact-card">
-        <h3>TRANSMISSION HQ</h3>
-        <p>Ready to connect, collaborate, or explore new territory together. Signals monitored around the clock.</p>
-        <div class="link-list">
-          <a class="ext-link" href="https://github.com/Mathmaticians" target="_blank">GITHUB REPOSITORY</a>
-          <a class="ext-link" href="mailto:hello@junon.github.io">SEND SIGNAL</a>
-        </div>
-      </div>
-      <div class="contact-card">
-        <h3>SYSTEM STATUS</h3>
-        <p>Current deployment metrics and operational readiness of the Junon command network.</p>
-        <div class="link-list">
-          <a class="ext-link" href="https://github.com/Mathmaticians/Junon.github.io/commits/main" target="_blank">COMMIT HISTORY</a>
-          <a class="ext-link" href="https://github.com/Mathmaticians/Junon.github.io" target="_blank">SOURCE CODE</a>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- FOOTER -->
   <footer>
-    <span class="footer-logo">JUNON</span>
-    <span>© 2024 MATHMATICIANS · ALL SECTORS SECURED</span>
+    <span class="f-logo">JUNON</span>
+    <span>MATHMATICIANS · OPEN NETWORK</span>
     <span>BUILD 847335b</span>
   </footer>
-
 </div>
+
+<!-- NEW POST MODAL -->
+<div id="post-modal" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <button id="modal-close" aria-label="Close">×</button>
+    <h2 class="modal-h">NEW <span>TRANSMISSION</span></h2>
+    <form id="post-form" onsubmit="return false">
+      <div class="fg">
+        <label class="fl" for="post-title">TITLE</label>
+        <input id="post-title" class="fi" type="text" placeholder="Transmission title…" maxlength="120" required/>
+      </div>
+      <div class="fg">
+        <label class="fl" for="post-body">CONTENT</label>
+        <textarea id="post-body" class="ft" placeholder="Write your message to the network…" required></textarea>
+      </div>
+      <div class="fg">
+        <label class="fl">TAGS <span style="font-size:.58rem;opacity:.6">(UP TO 5)</span></label>
+        <div class="tag-wrap" onclick="document.getElementById('tag-input').focus()">
+          <span id="tag-pills"></span>
+          <input id="tag-input" type="text" placeholder="Type a tag, press Enter…" autocomplete="off" maxlength="30"/>
+        </div>
+        <p class="tag-hint">Press Enter or comma to add · lowercase only</p>
+      </div>
+      <button id="submit-post" type="button">TRANSMIT POST</button>
+    </form>
+  </div>
+</div>
+
+<div id="toasts"></div>
 
 <script>
   // ── STARFIELD ──
-  const canvas = document.getElementById('starfield');
-  const ctx = canvas.getContext('2d');
+  const cvs = document.getElementById('starfield');
+  const ctx = cvs.getContext('2d');
   let stars = [];
-
-  function resize() {
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
-  }
-
-  function createStars(n) {
-    stars = [];
-    for (let i = 0; i < n; i++) {
-      stars.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        r: Math.random() * 1.4 + 0.2,
-        a: Math.random(),
-        speed: Math.random() * 0.003 + 0.001,
-        phase: Math.random() * Math.PI * 2,
-        color: Math.random() > 0.85
-          ? `hsl(${Math.random() > 0.5 ? 195 : 270},80%,80%)`
-          : '#fff'
-      });
-    }
-  }
-
-  function drawStars(t) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    stars.forEach(s => {
-      const alpha = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(t * s.speed * 1000 + s.phase));
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      ctx.fillStyle = s.color;
-      ctx.globalAlpha = alpha * s.a;
-      ctx.fill();
+  const resize = () => { cvs.width = innerWidth; cvs.height = innerHeight; };
+  const mkStars = () => {
+    stars = Array.from({length:300}, () => ({
+      x:Math.random()*cvs.width, y:Math.random()*cvs.height,
+      r:Math.random()*1.3+.2, a:Math.random(),
+      sp:Math.random()*.003+.001, ph:Math.random()*Math.PI*2,
+      hue:Math.random()>.85?(Math.random()>.5?195:270):null
+    }));
+  };
+  const draw = t => {
+    ctx.clearRect(0,0,cvs.width,cvs.height);
+    stars.forEach(s=>{
+      const al = .3+.7*(.5+.5*Math.sin(t*s.sp*1000+s.ph));
+      ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+      ctx.fillStyle = s.hue?`hsl(${s.hue},80%,80%)`:'#fff';
+      ctx.globalAlpha = al*s.a; ctx.fill();
     });
-    ctx.globalAlpha = 1;
-  }
+    ctx.globalAlpha=1;
+  };
+  resize(); mkStars();
+  (function loop(t){ draw(t/1000); requestAnimationFrame(loop); })(0);
+  window.addEventListener('resize',()=>{ resize(); mkStars(); });
 
-  let raf;
-  function loop(t) {
-    drawStars(t / 1000);
-    raf = requestAnimationFrame(loop);
-  }
-
-  resize();
-  createStars(280);
-  requestAnimationFrame(loop);
-  window.addEventListener('resize', () => { resize(); createStars(280); });
-
-  // ── SKILL BARS — animate on scroll ──
-  const observer = new IntersectionObserver(entries => {
-    entries.forEach(e => {
-      if (e.isIntersecting) {
-        e.target.querySelectorAll('.bar-fill').forEach(bar => {
-          bar.style.width = bar.dataset.width + '%';
-        });
-        observer.unobserve(e.target);
-      }
-    });
-  }, { threshold: 0.3 });
-
-  const grid = document.getElementById('skills-grid');
-  if (grid) observer.observe(grid);
-
-  // ── SMOOTH CURSOR GLOW ──
-  const cursor = document.createElement('div');
-  cursor.style.cssText = `
-    position:fixed;width:320px;height:320px;
-    border-radius:50%;pointer-events:none;z-index:9999;
-    background:radial-gradient(circle,rgba(0,210,255,0.04) 0%,transparent 70%);
-    transform:translate(-50%,-50%);transition:opacity 0.3s;
-  `;
-  document.body.appendChild(cursor);
-  document.addEventListener('mousemove', e => {
-    cursor.style.left = e.clientX + 'px';
-    cursor.style.top  = e.clientY + 'px';
+  // ── cursor glow ──
+  const g = Object.assign(document.createElement('div'),{style:
+    'position:fixed;width:340px;height:340px;border-radius:50%;pointer-events:none;z-index:9999;'+
+    'background:radial-gradient(circle,rgba(0,210,255,.04) 0%,transparent 70%);transform:translate(-50%,-50%);'
   });
+  document.body.appendChild(g);
+  document.addEventListener('mousemove',e=>{g.style.left=e.clientX+'px';g.style.top=e.clientY+'px';});
 </script>
 </body>
 </html>
