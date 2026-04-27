@@ -1,1 +1,1003 @@
-<h1>Hello World</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>JUNON // SECTOR COMMAND</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --void: #01020a;
+      --deep: #050b1a;
+      --panel: rgba(6, 18, 40, 0.85);
+      --border: rgba(0, 210, 255, 0.25);
+      --glow: #00d2ff;
+      --glow2: #7f5af0;
+      --accent: #ff4d6d;
+      --text: #c8e6f0;
+      --dim: rgba(200, 230, 240, 0.45);
+      --hud: rgba(0, 210, 255, 0.08);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--void);
+      color: var(--text);
+      font-family: 'Exo 2', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── STARFIELD ── */
+    #starfield {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ── NEBULA BG ── */
+    .nebula {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 80% 20%, rgba(127,90,240,0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 60% at 15% 75%, rgba(0,210,255,0.12) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 50% 50%, rgba(255,77,109,0.07) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* ── SCANLINES ── */
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.07) 2px,
+        rgba(0,0,0,0.07) 4px
+      );
+    }
+
+    /* ── WRAPPER ── */
+    #app {
+      position: relative;
+      z-index: 2;
+      min-height: 100vh;
+    }
+
+    /* ── NAV ── */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 48px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(1, 2, 10, 0.7);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-logo {
+      font-family: 'Orbitron', monospace;
+      font-weight: 900;
+      font-size: 1.1rem;
+      letter-spacing: 0.2em;
+      color: var(--glow);
+      text-shadow: 0 0 16px var(--glow), 0 0 40px rgba(0,210,255,0.3);
+      text-decoration: none;
+    }
+
+    .nav-logo span { color: var(--accent); }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.78rem;
+      letter-spacing: 0.15em;
+      color: var(--dim);
+      text-decoration: none;
+      text-transform: uppercase;
+      transition: color 0.2s, text-shadow 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--glow);
+      text-shadow: 0 0 10px var(--glow);
+    }
+
+    .nav-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.72rem;
+      color: #2ecc71;
+      letter-spacing: 0.1em;
+    }
+
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #2ecc71;
+      box-shadow: 0 0 8px #2ecc71;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 80px 24px 40px;
+      position: relative;
+    }
+
+    .hero-tag {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.3em;
+      color: var(--glow);
+      text-transform: uppercase;
+      margin-bottom: 24px;
+      opacity: 0;
+      animation: fadeUp 0.7s 0.2s forwards;
+    }
+
+    .hero-tag::before { content: '[ '; }
+    .hero-tag::after  { content: ' ]'; }
+
+    .hero h1 {
+      font-family: 'Orbitron', monospace;
+      font-weight: 900;
+      font-size: clamp(2.8rem, 8vw, 7rem);
+      line-height: 1;
+      letter-spacing: 0.05em;
+      color: #fff;
+      text-shadow:
+        0 0 30px var(--glow),
+        0 0 80px rgba(0,210,255,0.2);
+      opacity: 0;
+      animation: fadeUp 0.8s 0.4s forwards;
+      position: relative;
+    }
+
+    .hero h1 .accent { color: var(--glow); }
+
+    .hero-sub {
+      margin-top: 28px;
+      font-size: 1.1rem;
+      font-weight: 300;
+      color: var(--dim);
+      max-width: 560px;
+      line-height: 1.7;
+      letter-spacing: 0.04em;
+      opacity: 0;
+      animation: fadeUp 0.8s 0.6s forwards;
+    }
+
+    .hero-ctas {
+      margin-top: 48px;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+      opacity: 0;
+      animation: fadeUp 0.8s 0.8s forwards;
+    }
+
+    .btn {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      padding: 14px 36px;
+      border-radius: 3px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.25s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-primary {
+      background: transparent;
+      border: 1.5px solid var(--glow);
+      color: var(--glow);
+      box-shadow: 0 0 20px rgba(0,210,255,0.15), inset 0 0 20px rgba(0,210,255,0.04);
+    }
+
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(0,210,255,0.12), transparent);
+      transform: translateX(-100%);
+      transition: transform 0.4s;
+    }
+
+    .btn-primary:hover::before { transform: translateX(100%); }
+    .btn-primary:hover {
+      background: rgba(0,210,255,0.08);
+      box-shadow: 0 0 40px rgba(0,210,255,0.35), inset 0 0 30px rgba(0,210,255,0.08);
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1.5px solid rgba(127,90,240,0.5);
+      color: rgba(200,180,255,0.8);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--glow2);
+      background: rgba(127,90,240,0.1);
+      box-shadow: 0 0 30px rgba(127,90,240,0.25);
+      color: #fff;
+    }
+
+    /* ── HUD STATS ── */
+    .hud-bar {
+      margin-top: 80px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      max-width: 680px;
+      width: 100%;
+      opacity: 0;
+      animation: fadeUp 0.8s 1s forwards;
+    }
+
+    .hud-stat {
+      background: var(--hud);
+      border: 1px solid var(--border);
+      padding: 20px 28px;
+      text-align: center;
+      position: relative;
+    }
+
+    .hud-stat::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--glow), transparent);
+      opacity: 0.6;
+    }
+
+    .hud-num {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--glow);
+      text-shadow: 0 0 16px var(--glow);
+    }
+
+    .hud-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.2em;
+      color: var(--dim);
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    /* ── SECTION ── */
+    section {
+      padding: 100px 48px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.35em;
+      color: var(--glow);
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .section-label::before { content: '▸ '; }
+
+    .section-title {
+      font-family: 'Orbitron', monospace;
+      font-weight: 700;
+      font-size: clamp(1.6rem, 4vw, 2.8rem);
+      color: #fff;
+      letter-spacing: 0.04em;
+      margin-bottom: 60px;
+      text-shadow: 0 0 20px rgba(0,210,255,0.15);
+    }
+
+    /* ── CARDS ── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 36px 32px;
+      position: relative;
+      transition: all 0.3s;
+      cursor: default;
+      overflow: hidden;
+    }
+
+    .card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(0,210,255,0.04) 0%, transparent 60%);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .card:hover::after { opacity: 1; }
+    .card:hover { border-color: rgba(0,210,255,0.5); transform: translateY(-2px); }
+
+    .card-icon {
+      font-size: 1.8rem;
+      margin-bottom: 20px;
+      display: block;
+    }
+
+    .card-num {
+      position: absolute;
+      top: 16px; right: 20px;
+      font-family: 'Orbitron', monospace;
+      font-size: 0.65rem;
+      color: var(--border);
+      letter-spacing: 0.1em;
+    }
+
+    .card h3 {
+      font-family: 'Orbitron', monospace;
+      font-weight: 600;
+      font-size: 0.95rem;
+      letter-spacing: 0.1em;
+      color: #fff;
+      margin-bottom: 14px;
+    }
+
+    .card p {
+      font-size: 0.9rem;
+      color: var(--dim);
+      line-height: 1.75;
+    }
+
+    /* ── TIMELINE ── */
+    .timeline {
+      position: relative;
+      padding-left: 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 7px; top: 8px; bottom: 8px;
+      width: 1px;
+      background: linear-gradient(to bottom, var(--glow), var(--glow2), transparent);
+      opacity: 0.4;
+    }
+
+    .tl-item {
+      padding: 28px 0;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+
+    .tl-item:last-child { border-bottom: none; }
+
+    .tl-dot {
+      position: absolute;
+      left: -36px; top: 34px;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      border: 1.5px solid var(--glow);
+      background: var(--void);
+      box-shadow: 0 0 10px var(--glow);
+    }
+
+    .tl-date {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--glow);
+      letter-spacing: 0.15em;
+      margin-bottom: 8px;
+    }
+
+    .tl-item h3 {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 8px;
+      letter-spacing: 0.05em;
+    }
+
+    .tl-item p {
+      font-size: 0.88rem;
+      color: var(--dim);
+      line-height: 1.7;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 48px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--dim);
+      letter-spacing: 0.1em;
+    }
+
+    .footer-logo {
+      font-family: 'Orbitron', monospace;
+      font-weight: 700;
+      color: var(--glow);
+      text-shadow: 0 0 10px var(--glow);
+    }
+
+    /* ── CORNER DECORATIONS ── */
+    .corner-wrap {
+      position: relative;
+    }
+
+    .corner-wrap::before,
+    .corner-wrap::after {
+      content: '';
+      position: absolute;
+      width: 16px; height: 16px;
+      border-color: var(--glow);
+      border-style: solid;
+      opacity: 0.5;
+    }
+
+    .corner-wrap::before {
+      top: -1px; left: -1px;
+      border-width: 1.5px 0 0 1.5px;
+    }
+
+    .corner-wrap::after {
+      bottom: -1px; right: -1px;
+      border-width: 0 1.5px 1.5px 0;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+      margin: 0 48px;
+    }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 8px #2ecc71; }
+      50%       { opacity: 0.5; box-shadow: 0 0 3px #2ecc71; }
+    }
+
+    @keyframes twinkle {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.2; }
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    /* ── PLANET ── */
+    .planet-wrap {
+      position: absolute;
+      right: 6vw;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      opacity: 0;
+      animation: fadeUp 1.2s 0.5s forwards;
+    }
+
+    .planet {
+      width: 260px; height: 260px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%,
+        #1a3a6e 0%,
+        #0d1f3c 40%,
+        #050b1a 100%
+      );
+      box-shadow:
+        0 0 0 1px rgba(0,210,255,0.12),
+        0 0 60px rgba(0,210,255,0.1),
+        inset -30px -20px 50px rgba(127,90,240,0.25),
+        inset 20px 15px 40px rgba(0,210,255,0.08);
+      position: relative;
+    }
+
+    .planet::before {
+      content: '';
+      position: absolute;
+      inset: -40px;
+      border-radius: 50%;
+      border: 1px solid rgba(0,210,255,0.08);
+      animation: spin 25s linear infinite;
+    }
+
+    .planet::after {
+      content: '';
+      position: absolute;
+      top: 50%; left: -60px; right: -60px;
+      height: 22px;
+      margin-top: -11px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(0,210,255,0.06) 20%,
+        rgba(127,90,240,0.14) 50%,
+        rgba(0,210,255,0.06) 80%,
+        transparent 100%
+      );
+      border-radius: 50%;
+      border: 1px solid rgba(0,210,255,0.12);
+      transform: rotateX(70deg);
+    }
+
+    .orbit-dot {
+      position: absolute;
+      top: 50%; left: -40px;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--glow);
+      box-shadow: 0 0 10px var(--glow);
+      animation: spin 8s linear infinite;
+      transform-origin: calc(50% + 40px) 50%;
+    }
+
+    /* ── PROGRESS BARS ── */
+    .skills-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px 64px;
+    }
+
+    .skill-bar {
+      position: relative;
+    }
+
+    .skill-top {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .skill-name {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      color: var(--text);
+      text-transform: uppercase;
+    }
+
+    .skill-pct {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.7rem;
+      color: var(--glow);
+    }
+
+    .bar-track {
+      height: 4px;
+      background: rgba(0,210,255,0.1);
+      border-radius: 2px;
+      overflow: visible;
+      position: relative;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: linear-gradient(90deg, var(--glow2), var(--glow));
+      box-shadow: 0 0 12px var(--glow);
+      width: 0;
+      transition: width 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+    }
+
+    .bar-fill::after {
+      content: '';
+      position: absolute;
+      right: -1px; top: -4px;
+      width: 2px; height: 12px;
+      background: #fff;
+      box-shadow: 0 0 8px var(--glow);
+      border-radius: 1px;
+    }
+
+    /* ── CONTACT PANEL ── */
+    .contact-panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+    }
+
+    .contact-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 40px;
+      transition: border-color 0.3s;
+    }
+
+    .contact-card:hover { border-color: rgba(0,210,255,0.5); }
+
+    .contact-card h3 {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.85rem;
+      letter-spacing: 0.12em;
+      color: #fff;
+      margin-bottom: 12px;
+    }
+
+    .contact-card p {
+      font-size: 0.88rem;
+      color: var(--dim);
+      line-height: 1.7;
+      margin-bottom: 24px;
+    }
+
+    .link-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .ext-link {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      color: var(--glow);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s;
+    }
+
+    .ext-link::before {
+      content: '→';
+      transition: transform 0.2s;
+    }
+
+    .ext-link:hover {
+      color: #fff;
+      text-shadow: 0 0 10px var(--glow);
+    }
+
+    .ext-link:hover::before { transform: translateX(4px); }
+
+    @media (max-width: 768px) {
+      nav { padding: 16px 20px; }
+      .nav-links { display: none; }
+      section { padding: 60px 20px; }
+      .hero h1 { font-size: 2.6rem; }
+      .hud-bar { grid-template-columns: 1fr; }
+      .planet-wrap { display: none; }
+      .skills-grid { grid-template-columns: 1fr; }
+      .contact-panel { grid-template-columns: 1fr; }
+      footer { flex-direction: column; gap: 12px; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="starfield"></canvas>
+<div class="nebula"></div>
+<div class="scanlines"></div>
+
+<div id="app">
+
+  <!-- NAV -->
+  <nav>
+    <a class="nav-logo" href="#">JUN<span>.</span>ON</a>
+    <ul class="nav-links">
+      <li><a href="#about">Profile</a></li>
+      <li><a href="#skills">Systems</a></li>
+      <li><a href="#projects">Missions</a></li>
+      <li><a href="#contact">Comms</a></li>
+    </ul>
+    <div class="nav-status">
+      <div class="status-dot"></div>
+      ONLINE // SECTOR&nbsp;7
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="planet-wrap">
+      <div class="planet">
+        <div class="orbit-dot"></div>
+      </div>
+    </div>
+
+    <p class="hero-tag">Mathmaticians · Est. 2024</p>
+    <h1>JUNON<br><span class="accent">COMMAND</span></h1>
+    <p class="hero-sub">
+      Navigating the frontier of mathematics and computation. 
+      Exploring deep structures where logic meets the cosmos.
+    </p>
+    <div class="hero-ctas">
+      <a href="#projects" class="btn btn-primary">LAUNCH MISSIONS</a>
+      <a href="#about" class="btn btn-secondary">VIEW PROFILE</a>
+    </div>
+
+    <div class="hud-bar">
+      <div class="hud-stat">
+        <div class="hud-num">06</div>
+        <div class="hud-label">Commits</div>
+      </div>
+      <div class="hud-stat">
+        <div class="hud-num">01</div>
+        <div class="hud-label">Branch</div>
+      </div>
+      <div class="hud-stat">
+        <div class="hud-num">∞</div>
+        <div class="hud-label">Potential</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ABOUT -->
+  <section id="about">
+    <p class="section-label">Profile Data</p>
+    <h2 class="section-title">COMMANDER BRIEF</h2>
+    <div class="card-grid">
+      <div class="card corner-wrap">
+        <span class="card-num">01</span>
+        <span class="card-icon">🌌</span>
+        <h3>ORIGIN</h3>
+        <p>Launched from the Mathmaticians collective — a crew dedicated to pushing the boundaries of mathematical thinking and creative problem-solving.</p>
+      </div>
+      <div class="card corner-wrap">
+        <span class="card-num">02</span>
+        <span class="card-icon">🛸</span>
+        <h3>MISSION</h3>
+        <p>To build, learn, and deploy projects that bridge elegant theory with real-world impact. Every commit is a step further into the unknown.</p>
+      </div>
+      <div class="card corner-wrap">
+        <span class="card-num">03</span>
+        <span class="card-icon">⚡</span>
+        <h3>OBJECTIVE</h3>
+        <p>Constant iteration. Deploy fast, learn faster. Build tools and systems that matter — with precision, creativity, and relentless curiosity.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- SKILLS -->
+  <section id="skills">
+    <p class="section-label">System Diagnostics</p>
+    <h2 class="section-title">SKILL MATRIX</h2>
+    <div class="skills-grid" id="skills-grid">
+      <div class="skill-bar">
+        <div class="skill-top">
+          <span class="skill-name">Mathematics</span>
+          <span class="skill-pct">95%</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" data-width="95"></div></div>
+      </div>
+      <div class="skill-bar">
+        <div class="skill-top">
+          <span class="skill-name">Web Development</span>
+          <span class="skill-pct">82%</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" data-width="82"></div></div>
+      </div>
+      <div class="skill-bar">
+        <div class="skill-top">
+          <span class="skill-name">Algorithms</span>
+          <span class="skill-pct">88%</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" data-width="88"></div></div>
+      </div>
+      <div class="skill-bar">
+        <div class="skill-top">
+          <span class="skill-name">Problem Solving</span>
+          <span class="skill-pct">90%</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" data-width="90"></div></div>
+      </div>
+      <div class="skill-bar">
+        <div class="skill-top">
+          <span class="skill-name">Data Analysis</span>
+          <span class="skill-pct">76%</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" data-width="76"></div></div>
+      </div>
+      <div class="skill-bar">
+        <div class="skill-top">
+          <span class="skill-name">Creative Design</span>
+          <span class="skill-pct">70%</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" data-width="70"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- MISSIONS / PROJECTS -->
+  <section id="projects">
+    <p class="section-label">Mission Log</p>
+    <h2 class="section-title">ACTIVE OPERATIONS</h2>
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-date">MISSION 001 // ACTIVE</div>
+        <h3>JUNON COMMAND — SITE LAUNCH</h3>
+        <p>Establishing the primary hub. Building a public-facing interface to showcase mathematical explorations, projects, and research to the world.</p>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-date">MISSION 002 // QUEUED</div>
+        <h3>PROJECT DELTA — MATH EXPLORER</h3>
+        <p>An interactive tool for visualizing complex mathematical concepts. Planned deployment upon completion of primary infrastructure.</p>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-date">MISSION 003 // CLASSIFIED</div>
+        <h3>OPERATION SIGMA — TBA</h3>
+        <p>Details are restricted. Clearance required. Stand by for further transmissions from Sector Command.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- CONTACT -->
+  <section id="contact">
+    <p class="section-label">Open Channel</p>
+    <h2 class="section-title">ESTABLISH COMMS</h2>
+    <div class="contact-panel">
+      <div class="contact-card">
+        <h3>TRANSMISSION HQ</h3>
+        <p>Ready to connect, collaborate, or explore new territory together. Signals monitored around the clock.</p>
+        <div class="link-list">
+          <a class="ext-link" href="https://github.com/Mathmaticians" target="_blank">GITHUB REPOSITORY</a>
+          <a class="ext-link" href="mailto:hello@junon.github.io">SEND SIGNAL</a>
+        </div>
+      </div>
+      <div class="contact-card">
+        <h3>SYSTEM STATUS</h3>
+        <p>Current deployment metrics and operational readiness of the Junon command network.</p>
+        <div class="link-list">
+          <a class="ext-link" href="https://github.com/Mathmaticians/Junon.github.io/commits/main" target="_blank">COMMIT HISTORY</a>
+          <a class="ext-link" href="https://github.com/Mathmaticians/Junon.github.io" target="_blank">SOURCE CODE</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <span class="footer-logo">JUNON</span>
+    <span>© 2024 MATHMATICIANS · ALL SECTORS SECURED</span>
+    <span>BUILD 847335b</span>
+  </footer>
+
+</div>
+
+<script>
+  // ── STARFIELD ──
+  const canvas = document.getElementById('starfield');
+  const ctx = canvas.getContext('2d');
+  let stars = [];
+
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+
+  function createStars(n) {
+    stars = [];
+    for (let i = 0; i < n; i++) {
+      stars.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        r: Math.random() * 1.4 + 0.2,
+        a: Math.random(),
+        speed: Math.random() * 0.003 + 0.001,
+        phase: Math.random() * Math.PI * 2,
+        color: Math.random() > 0.85
+          ? `hsl(${Math.random() > 0.5 ? 195 : 270},80%,80%)`
+          : '#fff'
+      });
+    }
+  }
+
+  function drawStars(t) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    stars.forEach(s => {
+      const alpha = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(t * s.speed * 1000 + s.phase));
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = s.color;
+      ctx.globalAlpha = alpha * s.a;
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  let raf;
+  function loop(t) {
+    drawStars(t / 1000);
+    raf = requestAnimationFrame(loop);
+  }
+
+  resize();
+  createStars(280);
+  requestAnimationFrame(loop);
+  window.addEventListener('resize', () => { resize(); createStars(280); });
+
+  // ── SKILL BARS — animate on scroll ──
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.querySelectorAll('.bar-fill').forEach(bar => {
+          bar.style.width = bar.dataset.width + '%';
+        });
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.3 });
+
+  const grid = document.getElementById('skills-grid');
+  if (grid) observer.observe(grid);
+
+  // ── SMOOTH CURSOR GLOW ──
+  const cursor = document.createElement('div');
+  cursor.style.cssText = `
+    position:fixed;width:320px;height:320px;
+    border-radius:50%;pointer-events:none;z-index:9999;
+    background:radial-gradient(circle,rgba(0,210,255,0.04) 0%,transparent 70%);
+    transform:translate(-50%,-50%);transition:opacity 0.3s;
+  `;
+  document.body.appendChild(cursor);
+  document.addEventListener('mousemove', e => {
+    cursor.style.left = e.clientX + 'px';
+    cursor.style.top  = e.clientY + 'px';
+  });
+</script>
+</body>
+</html>
